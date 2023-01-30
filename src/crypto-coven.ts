@@ -1,73 +1,51 @@
+import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import {
-  Approval as ApprovalEvent,
-  ApprovalForAll as ApprovalForAllEvent,
-  OwnershipTransferred as OwnershipTransferredEvent,
-  Transfer as TransferEvent
-} from "../generated/CryptoCoven/CryptoCoven"
-import {
-  Approval,
-  ApprovalForAll,
-  OwnershipTransferred,
-  Transfer
-} from "../generated/schema"
+  CryptoCoven,
+  Transfer as TransferEvent,
+} from "../generated/CryptoCoven/CryptoCoven";
+import { Token, Transfer } from "../generated/schema";
+import { TokenMetadata as TokenMetadataTemplate } from "../generated/templates";
 
-export function handleApproval(event: ApprovalEvent): void {
-  let entity = new Approval(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.owner = event.params.owner
-  entity.approved = event.params.approved
-  entity.tokenId = event.params.tokenId
+// const ipfshash = "QmaXzZhcYnsisuue5WRdQDH6FDvqkLQX1NckLqBYeYYEfm";
 
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
+function getOrCreateToken(tokenId: BigInt, address: Address): Token {
+  let id = Bytes.fromI32(tokenId.toI32());
+  let token = Token.load(id);
 
-  entity.save()
-}
+  if (!token) {
+    let instance = CryptoCoven.bind(address);
+    token = new Token(id);
 
-export function handleApprovalForAll(event: ApprovalForAllEvent): void {
-  let entity = new ApprovalForAll(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.owner = event.params.owner
-  entity.operator = event.params.operator
-  entity.approved = event.params.approved
+    token.uri = instance.tokenURI(tokenId);
 
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
+    token.tokenURI = "/" + tokenId.toString() + ".json";
 
-  entity.save()
-}
+    // const tokenIpfsHash = ipfshash + token.tokenURI!;
 
-export function handleOwnershipTransferred(
-  event: OwnershipTransferredEvent
-): void {
-  let entity = new OwnershipTransferred(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.previousOwner = event.params.previousOwner
-  entity.newOwner = event.params.newOwner
+    const tokenIpfsHash = token.uri!.replace("ipfs://", "");
+    token.ipfsURI = tokenIpfsHash;
 
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
+    TokenMetadataTemplate.create(tokenIpfsHash);
 
-  entity.save()
+    token.save();
+  }
+
+  return token;
 }
 
 export function handleTransfer(event: TransferEvent): void {
   let entity = new Transfer(
     event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.from = event.params.from
-  entity.to = event.params.to
-  entity.tokenId = event.params.tokenId
+  );
+  entity.from = event.params.from;
+  entity.to = event.params.to;
+  entity.tokenId = event.params.tokenId;
 
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
+  entity.blockNumber = event.block.number;
+  entity.blockTimestamp = event.block.timestamp;
+  entity.transactionHash = event.transaction.hash;
 
-  entity.save()
+  getOrCreateToken(entity.tokenId, event.address);
+
+  entity.save();
 }
